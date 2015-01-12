@@ -166,18 +166,22 @@ static char * extract_cookie(request_rec *r, const char *szCookie_name)
 
     /* get cookie string */
     szRaw_cookie = apr_table_get(r->headers_in, "Cookie");
-    if (!szRaw_cookie)
+    if (!szRaw_cookie) {
+	ap_log_rerror(APLOG_MARK, APLOG_INFO|APLOG_NOERRNO, 0, r, ERRTAG "no cookies found");
 	return 0;
+    }
 
     /* loop to search cookie name in cookie header */
     do {
 	/* search cookie name in cookie string */
 	if ((szRaw_cookie = strstr(szRaw_cookie, szCookie_name)) == 0)
 	    return 0;
+
 	szRaw_cookie_start = szRaw_cookie;
 	/* search '=' */
 	if ((szRaw_cookie = strchr(szRaw_cookie, '=')) == 0)
 	    return 0;
+
     } while (strncmp(szCookie_name, szRaw_cookie_start, szRaw_cookie - szRaw_cookie_start) != 0);
 
     /* skip '=' */
@@ -190,18 +194,20 @@ static char * extract_cookie(request_rec *r, const char *szCookie_name)
     /* dup the value string found in apache pool and set the result pool ptr to szCookie ptr */
     if ((szCookie = apr_pstrndup(r->pool, szRaw_cookie, szRaw_cookie_end-szRaw_cookie)) == 0)
 	return 0;
+
     /* unescape the value string */ 
     if (ap_unescape_url(szCookie) != 0)
 	return 0;
 
-    /* be extra paranoid about the cookie value, reject if no md5sum */
-    if (strlen(szCookie) != 32)
-	return 0;
-    for (i = 0; i < 32; i++) {
+    /* Cookies are hashed so it should be hexadecimal plus a prefix with the _ . */
+    for (i = 0; i < strlen(szCookie); i++) {
+        if (szCookie[i] == '_')
+            continue;
 	if (szCookie[i] >= '0' && szCookie[i] <= '9')
 	    continue;
 	if (szCookie[i] >= 'a' && szCookie[i] <= 'f')
 	    continue;
+
 	return 0;
     }
 
